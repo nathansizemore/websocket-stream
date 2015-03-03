@@ -23,7 +23,7 @@
 
 //! WebSocketStream crate
 
-#![feature(libc, net, std_misc, os)]
+#![feature(libc, net, std_misc, os, collections, core)]
 
 extern crate libc;
 
@@ -44,7 +44,7 @@ extern "system" {
 }
 
 
-pub type NewResult = Result<WebSocketStream, SetFlError>;
+pub type NewResult = Result<WebSocketStream, SetFdError>;
 pub type ReadResult = Result<(OpCode, Vec<u8>), ReadError>;
 pub type WriteResult = Result<u64, WriteError>;
 
@@ -53,14 +53,14 @@ type SysWriteResult = Result<u64, WriteError>;
 type PayloadKeyResult = Result<u8, ReadError>;
 type PayloadLenResult = Result<u64, ReadError>;
 
-
+/// Represents a non-blocking RFC-6455 Protocol stream
 pub struct WebSocketStream {
     stream: TcpStream
 }
 
 impl WebSocketStream {
 
-    /// Creates a new non-blocking websocket
+    /// Creates a new WebSocket
     pub fn new(stream: TcpStream) -> NewResult {
         // Set fd as non-blocking
         let fd = stream.as_raw_fd();
@@ -75,16 +75,16 @@ impl WebSocketStream {
         if response < 0 {
             let errno = os::errno();
             return match errno {
-                posix88::EACCES     => Err(SetFlError::EACCES),
-                posix88::EAGAIN     => Err(SetFlError::EAGAIN),
-                posix88::EBADF      => Err(SetFlError::EBADF),
-                posix88::EDEADLK    => Err(SetFlError::EDEADLK),
-                posix88::EFAULT     => Err(SetFlError::EFAULT),
-                posix88::EINTR      => Err(SetFlError::EINTR),
-                posix88::EINVAL     => Err(SetFlError::EINVAL),
-                posix88::EMFILE     => Err(SetFlError::EMFILE),
-                posix88::ENOLCK     => Err(SetFlError::ENOLCK),
-                posix88::EPERM      => Err(SetFlError::EPERM),
+                posix88::EACCES     => Err(SetFdError::EACCES),
+                posix88::EAGAIN     => Err(SetFdError::EAGAIN),
+                posix88::EBADF      => Err(SetFdError::EBADF),
+                posix88::EDEADLK    => Err(SetFdError::EDEADLK),
+                posix88::EFAULT     => Err(SetFdError::EFAULT),
+                posix88::EINTR      => Err(SetFdError::EINTR),
+                posix88::EINVAL     => Err(SetFdError::EINVAL),
+                posix88::EMFILE     => Err(SetFdError::EMFILE),
+                posix88::ENOLCK     => Err(SetFdError::ENOLCK),
+                posix88::EPERM      => Err(SetFdError::EPERM),
                 _ => panic!("Unknown errno from fcntl: {}", errno)
             };
         }
@@ -94,12 +94,19 @@ impl WebSocketStream {
         })
     }
 
+    /// Attempts to read data from the socket.
+    ///
+    /// If data is available, it waits until a complete message has
+    /// been received.
+    /// It will return immediately if no data is available, or data is present,
+    /// but a complete message is not yet available.  The previously read
+    /// sections of that message will be discarded.  Non-blocking, ftw!
     pub fn read(&mut self) -> ReadResult {
         match self.check_for_data() {
             Ok(buf) => {
                 if buf.len() > 0 {
                     // Ensure opcode is valid
-                    let op_code = buf[0] & OP_CODE_MASK;
+                    let op_code = buf[0] & OP_CODE_UN_MASK;
                     let valid_op = match op_code {
                         OP_CONTINUATION => true,
                         OP_TEXT         => true,
@@ -178,7 +185,7 @@ impl WebSocketStream {
         match self.read_num_bytes(1) {
             Ok(key_buf) => {
                 if key_buf.len() > 0 {
-                    Ok(key_buf[0] & PAYLOAD_KEY_MASK)
+                    Ok(key_buf[0] & PAYLOAD_KEY_UN_MASK)
                 } else {
                     Err(ReadError::DataStop)
                 }
@@ -258,7 +265,7 @@ impl WebSocketStream {
                 total_read += num_read as usize;
                 temp_count -= num_read as usize;
             } else if num_read == 0 {
-                return Ok(Vec::<u8>::new());
+                return Ok(final_buffer);
             } else {
                 let errno = os::errno();
                 return match errno {
@@ -273,5 +280,100 @@ impl WebSocketStream {
             }
         }
         Ok(final_buffer)
+    }
+
+    /// Attempts to write data to the socket
+    pub fn write(&mut self, op: OpCode, payload: &mut Vec<u8>) -> WriteResult {
+        let mut out_buf: Vec<u8> = Vec::with_capacity(payload.len() + 9);
+
+        self.set_op_code(&op, &mut out_buf);
+        self.set_payload_info(payload.len(), &mut out_buf);
+        out_buf.append(payload);
+
+        self.write_bytes(&out_buf)
+    }
+
+    fn set_op_code(&self, op: &OpCode, buf: &mut Vec<u8>) {
+        let op_code = match *op {
+            OpCode::Continuation    => OP_CONTINUATION,
+            OpCode::Text            => OP_TEXT,
+            OpCode::Binary          => OP_BINARY,
+            OpCode::Close           => OP_CLOSE,
+            OpCode::Ping            => OP_PING,
+            OpCode::Pong            => OP_PONG
+        };
+        buf.push(op_code | OP_CODE_MASK);
+    }
+
+    fn set_payload_info(&self, len: usize, buf: &mut Vec<u8>) {
+        if len <= 125 {
+            buf.push(len as u8);
+        } else if len <= 65535 {
+            let mut len_buf = [0u8; 2];
+            len_buf[0] = (len as u16 & 0b1111_1111u16 << 8) as u8;
+            len_buf[1] = (len as u16 & 0b1111_1111 as u16) as u8;
+
+            buf.push(126u8); // 16 bit prelude
+            buf.push(len_buf[0]);
+            buf.push(len_buf[1]);
+        } else {
+            let mut len_buf = [0u8; 8];
+            len_buf[0] = (len as u64 & 0b1111_1111u64 << 56) as u8;
+            len_buf[1] = (len as u64 & 0b1111_1111u64 << 48) as u8;
+            len_buf[2] = (len as u64 & 0b1111_1111u64 << 40) as u8;
+            len_buf[3] = (len as u64 & 0b1111_1111u64 << 32) as u8;
+            len_buf[4] = (len as u64 & 0b1111_1111u64 << 24) as u8;
+            len_buf[5] = (len as u64 & 0b1111_1111u64 << 16) as u8;
+            len_buf[6] = (len as u64 & 0b1111_1111u64 << 8) as u8;
+            len_buf[7] = (len as u64 & 0b1111_1111u64) as u8;
+
+            buf.push(127u8); // 64 bit prelude
+            buf.push(len_buf[0]);
+            buf.push(len_buf[1]);
+            buf.push(len_buf[2]);
+            buf.push(len_buf[3]);
+            buf.push(len_buf[4]);
+            buf.push(len_buf[5]);
+            buf.push(len_buf[6]);
+            buf.push(len_buf[7]);
+        }
+    }
+
+    fn write_bytes(&mut self, buf: &Vec<u8>) -> SysWriteResult {
+        let buffer = buf.as_slice();
+        let fd = self.stream.as_raw_fd();
+        let count = buf.len() as size_t;
+
+        let mut num_written;
+        unsafe {
+            let buff_ptr = buffer.as_ptr();
+            let void_buff_ptr: *const c_void = mem::transmute(buff_ptr);
+            num_written = write(fd, void_buff_ptr, count);
+        }
+
+        if num_written < 0 {
+            let errno = os::errno();
+            return match errno {
+                posix88::EAGAIN     => Err(WriteError::EAGAIN),
+                posix88::EBADF      => Err(WriteError::EBADF),
+                posix88::EFAULT     => Err(WriteError::EFAULT),
+                posix88::EFBIG      => Err(WriteError::EFBIG),
+                posix88::EINTR      => Err(WriteError::EINTR),
+                posix88::EINVAL     => Err(WriteError::EINVAL),
+                posix88::EIO        => Err(WriteError::EIO),
+                posix88::ENOSPC     => Err(WriteError::ENOSPC),
+                posix88::EPIPE      => Err(WriteError::EPIPE),
+                _ => panic!("Unknown errno: {}", errno),
+            }
+        }
+        Ok(num_written as u64)
+    }
+}
+
+impl Clone for WebSocketStream {
+    fn clone(&self) -> WebSocketStream {
+        WebSocketStream {
+            stream: self.stream.try_clone().unwrap()
+        }
     }
 }
