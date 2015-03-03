@@ -12,7 +12,6 @@ stream's file descriptor. Aside from the system calls, the entire API is
 memory safe.
 
 ### Why another Websocket Thing in Rust?
-
 There are a lot of Websocket libraries out for Rust right now, but they all
 force the same model of server design on the library user. Most implement
 Websockets by creating a thread for each connection to read, and one to write.
@@ -23,7 +22,6 @@ concurrent connections for long periods of time. Context switching between
 write operations.
 
 ### Example Usage
-
 ~~~rust
 extern crate "websocket-stream" as wss;
 
