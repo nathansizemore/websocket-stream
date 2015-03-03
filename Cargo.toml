@@ -1,0 +1,5 @@
+[package]
+
+name = "websocket-stream"
+version = "0.0.1"
+authors = ["Nathan <nathanrsizemore@gmail.com>"]
