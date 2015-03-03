@@ -1,7 +1,7 @@
 [package]
 name = "websocket-stream"
-version = "0.0.1"
-authors = ["Nathan <nathanrsizemore@gmail.com>"]
+version = "0.0.2"
+authors = ["Nathan Sizemore <nathanrsizemore@gmail.com>"]
 description = "Non-blocking Websocket (RFC-6455) wrapper for TcpStream"
 repository = "https://github.com/nathansizemore/websocket-stream"
 readme = "README.md"
