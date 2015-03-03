@@ -1,4 +1,4 @@
-websocket-stream
+websocket-stream [<img src="https://travis-ci.org/nathansizemore/websocket-stream.png?branch=master">](https://travis-ci.org/nathansizemore/websocket-stream)
 ================
 
 websocket-stream is a non-blocking [RFC-6455](https://tools.ietf.org/html/rfc6455)
