@@ -16,7 +16,7 @@ memory safe.
 There are a lot of Websocket libraries out for Rust right now, but they all
 force the same model of server design on the library user. Most implement
 Websockets by creating a thread for each connection to read, and one to write.
-Mainly to overcome Rust's default IO implementation as blocking by default.
+Mainly to overcome Rust's blocking as default IO implementation.
 This is wonderful, unless your server is expected to handle *lots* of
 concurrent connections for long periods of time. Context switching between
 200k threads will absolutely kill any gains you get by having separate read and
