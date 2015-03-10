@@ -289,11 +289,11 @@ impl WebSocketStream {
                     break;
                 }                
 
-                // We'll give it 5 more read attempts. If nothing by then,
+                // We'll give it 10 more read attempts. If nothing by then,
                 // We should assume the client has forced disconnect and not
                 // sent use a Close Op (Not a very nice client...)
                 num_reads_missed += 1;
-                if num_reads_missed > 4 {
+                if num_reads_missed > 9 {
                     return Ok(Vec::<u8>::new());
                 }
             }
