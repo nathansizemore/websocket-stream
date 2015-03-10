@@ -246,6 +246,7 @@ impl WebSocketStream {
         let mut total_read: usize = 0;
         let mut final_buffer: Vec<u8> = Vec::with_capacity(count);
 
+        let mut num_reads_missed = 0u8;
         while total_read < count {
             let mut num_read;
             let mut buffer = [0u8; 512];
@@ -264,9 +265,7 @@ impl WebSocketStream {
 
                 total_read += num_read as usize;
                 temp_count -= num_read as usize;
-            } else if num_read == 0 {
-                return Ok(final_buffer);
-            } else {
+            } else if num_read < 0 {
                 let errno = os::errno();
                 return match errno {
                     posix88::EBADF      => Err(ReadError::EBADF),
@@ -277,6 +276,26 @@ impl WebSocketStream {
                     posix88::EISDIR     => Err(ReadError::EISDIR),
                     _ => Ok(Vec::<u8>::new()),
                 };
+            } else { // Zero data read
+
+                // If this is our first attempt and we've read nothing, there
+                // is nothing to read, and we're done with this call
+                if total_read == 0 {
+                    return Ok(Vec::<u8>::new());
+                }
+
+                // Have we read all we need to?
+                if total_read == count {
+                    break;
+                }                
+
+                // We'll give it 5 more read attempts. If nothing by then,
+                // We should assume the client has forced disconnect and not
+                // sent use a Close Op (Not a very nice client...)
+                num_reads_missed += 1;
+                if num_reads_missed > 4 {
+                    return Ok(Vec::<u8>::new());
+                }
             }
         }
         Ok(final_buffer)

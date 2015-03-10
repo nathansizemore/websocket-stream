@@ -5,5 +5,5 @@ authors = ["Nathan Sizemore <nathanrsizemore@gmail.com>"]
 description = "Non-blocking Websocket (RFC-6455) wrapper for TcpStream"
 repository = "https://github.com/nathansizemore/websocket-stream"
 readme = "README.md"
-keywords = ["websocket", "socket", "rfc-6455", "non-blocking"]
+keywords = ["websocket", "socket", "rfc-6455", "web"]
 license = "MIT"
