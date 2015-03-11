@@ -169,6 +169,7 @@ impl WebSocketStream {
                                         for x in 0..buf.len() {
                                             payload.push(buf[x] ^ mask[x % 4]);
                                         }
+                                        println!("Payload: {}", String::from_utf8(payload.clone()).unwrap());
                                         Ok(payload)
                                     }
                                     Err(e) => Err(e)
