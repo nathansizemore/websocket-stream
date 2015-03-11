@@ -151,15 +151,12 @@ impl WebSocketStream {
     fn read_payload(&mut self) -> SysReadResult {
         match self.read_payload_key() {
             Ok(key) => {
-                println!("Payload key: {}", key);
                 match self.read_payload_len(key) {
                     Ok(len) => {
-                        println!("Payload length: {}", len);
                         match self.read_masking_key() {
                             Ok(mask) => {
                                 match self.read_num_bytes(len as usize) {
                                     Ok(buf) => {
-                                        println!("Recv payload length: {}", buf.len());
                                         if buf.len() < 1 {
                                             return Err(ReadError::DataStop);
                                         }
@@ -169,7 +166,6 @@ impl WebSocketStream {
                                         for x in 0..buf.len() {
                                             payload.push(buf[x] ^ mask[x % 4]);
                                         }
-                                        println!("Payload: {}", String::from_utf8(payload.clone()).unwrap());
                                         Ok(payload)
                                     }
                                     Err(e) => Err(e)
@@ -268,7 +264,7 @@ impl WebSocketStream {
 
                 total_read += num_read as usize;
                 temp_count -= num_read as usize;
-            } else if num_read == 0 && total_read == 0 {
+            } else if num_read == 0 {
                 return Ok(final_buffer);
             } else {
                 let errno = os::errno();
