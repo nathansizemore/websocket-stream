@@ -264,7 +264,7 @@ impl WebSocketStream {
 
                 total_read += num_read as usize;
                 temp_count -= num_read as usize;
-            } else if num_read == 0 {
+            } else if num_read == 0 && total_read == 0 {
                 return Ok(final_buffer);
             } else {
                 let errno = os::errno();
