@@ -249,23 +249,30 @@ impl WebSocketStream {
         let mut num_reads_missed = 0u8;
         while total_read < count {
             let mut num_read;
-            let mut buffer = [0u8; 512];
+            let mut buffer;
             let fd = self.stream.as_raw_fd();
 
             unsafe {
-                let buf_ptr = buffer.as_mut_ptr();
-                let void_buf_ptr: *mut c_void = mem::transmute(buf_ptr);
-                num_read = read(fd, void_buf_ptr, temp_count as size_t);
+                buffer = libc::calloc(count as size_t,
+                    mem::size_of::<u8>() as size_t);
+                num_read = read(fd, buffer, temp_count as size_t);
             }
 
             if num_read > 0 {
-                for x in 0..num_read {
-                    final_buffer.push(buffer[x as usize]);
+                unsafe {
+                    let temp = Vec::<u8>::from_raw_parts(buffer as *mut u8,
+                        num_read as usize, num_read as usize);
+
+                    for x in 0..num_read {
+                        final_buffer.push(temp[x as usize]);
+                    }
+                    libc::free(buffer);
                 }
 
                 total_read += num_read as usize;
                 temp_count -= num_read as usize;
             } else if num_read < 0 {
+                unsafe { libc::free(buffer); }
                 let errno = os::errno();
                 return match errno {
                     posix88::EBADF      => Err(ReadError::EBADF),
@@ -281,19 +288,21 @@ impl WebSocketStream {
                 // If this is our first attempt and we've read nothing, there
                 // is nothing to read, and we're done with this call
                 if total_read == 0 {
+                    unsafe { libc::free(buffer); }
                     return Ok(Vec::<u8>::new());
                 }
 
                 // Have we read all we need to?
                 if total_read == count {
                     break;
-                }                
+                }
 
                 // We'll give it 5 more read attempts. If nothing by then,
                 // We should assume the client has forced disconnect and not
                 // sent use a Close Op (Not a very nice client...)
                 num_reads_missed += 1;
                 if num_reads_missed > 4 {
+                    unsafe { libc::free(buffer); }
                     return Ok(Vec::<u8>::new());
                 }
             }
