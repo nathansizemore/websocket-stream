@@ -52,6 +52,7 @@ pub const OP_PING: u8 = 0x9;
 pub const OP_PONG: u8 = 0xA;
 
 
+#[derive(Debug, Clone)]
 pub enum OpCode {
     /// Continuation frame from last packed
     Continuation,
@@ -73,7 +74,12 @@ pub enum OpCode {
     Pong
 }
 
+#[derive(Debug)]
 pub enum ReadError {
+    /// Non-blocking I/O has been selected using O_NONBLOCK and the
+    /// read would block.
+    EAGAIN,
+
     /// fd is not a valid file descriptor or is not open for reading
     EBADF,
 
@@ -99,19 +105,16 @@ pub enum ReadError {
     /// fd refers to a directory.
     EISDIR,
 
+    /// Insufficient memory is available
+    ENOMEM,
+
     /// Invalid OpCode.
     /// According to RFC-6455: "If an unknown opcode is received,
     /// the receiving endpoint MUST _Fail the WebSocket Connection_"
-    OpCode,
-
-    /// Returned when the number of bytes requested to read is greater than
-    /// zero, but the number of bytes read was zero
-    DataStop,
-
-    /// Returned when there is no data waiting to be read
-    NoData
+    OpCode
 }
 
+#[derive(Debug)]
 pub enum WriteError {
     /// Non-blocking I/O has been selected using O_NONBLOCK and the
     /// write would block.
@@ -151,6 +154,7 @@ pub enum WriteError {
     EPIPE
 }
 
+#[derive(Debug)]
 pub enum SetFdError {
     /// Operation is prohibited by locks held by other processes.
     EACCES,
@@ -196,15 +200,15 @@ pub enum SetFdError {
 impl fmt::Display for ReadError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            ReadError::EAGAIN   => "EAGAIN".fmt(f),
             ReadError::EBADF    => "EBADF".fmt(f),
             ReadError::EFAULT   => "EFAULT".fmt(f),
             ReadError::EINTR    => "EINTR".fmt(f),
             ReadError::EINVAL   => "EINVAL".fmt(f),
             ReadError::EIO      => "EIO".fmt(f),
             ReadError::EISDIR   => "EISDIR".fmt(f),
-            ReadError::OpCode   => "OpCode".fmt(f),
-            ReadError::DataStop => "DataStop".fmt(f),
-            ReadError::NoData   => "NoData".fmt(f)
+            ReadError::ENOMEM   => "ENOMEM".fmt(f),
+            ReadError::OpCode   => "OpCode".fmt(f)
         }
     }
 }
