@@ -23,12 +23,12 @@
 
 //! WebsocketStream crate
 
- #![feature(io_ext)]
+ #![feature(io_ext, collections)]
 
 extern crate libc;
 extern crate errno;
 
-use std::{mem, ptr};
+use std::{mem, ptr, fmt};
 use std::result::Result;
 use std::net::TcpStream;
 use std::os::unix::io::AsRawFd;
@@ -86,13 +86,15 @@ pub struct WebsocketStream {
     buffer: Buffer
 }
 
-/// Incoming buffer
+/// Generic buffer used for reading/writing
+#[derive(Clone)]
 struct Buffer {
     remaining: usize,
     buf: Vec<u8>
 }
 
 /// Websocket Frame
+#[derive(Clone)]
 struct Message {
     op_code: OpCode,
     payload_key: u8,
@@ -102,7 +104,7 @@ struct Message {
 }
 
 /// Stream I/O mode
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum Mode {
     /// Blocking I/O
     Block,
@@ -111,7 +113,7 @@ pub enum Mode {
 }
 
 /// Stream state
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum State {
     OpCode,
     PayloadKey,
@@ -273,13 +275,15 @@ impl WebsocketStream {
 
     /// Attempts to read data from the socket.
     ///
-    /// If stream is in Mode::Block, this will block forever until data is received
+    /// If stream is in Mode::Block, this will block forever until
+    /// data is received
     ///
-    /// If socket is in Mode::NonBlock and data is available, it will read until
-    /// a complete message is received.  If the buffer has run out, and it is still
-    /// waiting on the remaining payload, it will attempt 3 more reads and then give up,
-    /// disregarding the message.
+    /// If socket is in Mode::NonBlock and data is available,
+    /// it will read until a complete message is received.  If the buffer
+    /// has run out, and it is still waiting on the remaining payload, it
+    /// will attempt 3 more reads and then give up, disregarding the message.
     pub fn read(&mut self) -> ReadResult {
+
         // Read the OpCode
         if self.state == State::OpCode {
             if self.buffer.remaining == 0 {
@@ -307,7 +311,7 @@ impl WebsocketStream {
             }
             self.msg.payload_key = result.unwrap();
 
-            // Set state to next state
+            // Set next state
             self.state = State::PayloadLength;
             self.buffer.remaining = match self.msg.payload_key {
                 127 => 8,
@@ -339,6 +343,15 @@ impl WebsocketStream {
 
                 // Grab result
                 self.msg.payload_len = result.unwrap();
+
+                // Update bytes remaining
+                let bytes_needed = match self.msg.payload_key {
+                    127 => 8,
+                    126 => 2,
+                    _ => 0
+                };
+                self.buffer.remaining = (bytes_needed -
+                    self.buffer.buf.len() as u64) as usize;
             } else {
                 // If buffer.remaining == 0, len was the key
                 self.state = State::MaskingKey;
@@ -399,6 +412,10 @@ impl WebsocketStream {
                     self.buffer.buf[x] ^ self.msg.masking_key[x % 4]);
             }
 
+            self.state = State::OpCode;
+            self.buffer.remaining = 1;
+            self.buffer.buf = Vec::<u8>::with_capacity(1);
+
             // Return the OpCode and Payload
             return Ok((self.msg.op_code.clone(), self.msg.payload.clone()))
         }
@@ -442,6 +459,7 @@ impl WebsocketStream {
         Ok(op)
     }
 
+    /// Attempts to read the payload key from the socket
     fn read_payload_key(&mut self) -> PayloadKeyResult {
         match self.read_num_bytes(1) {
             Ok(()) => Ok(self.buffer.buf[0] & PAYLOAD_KEY_UN_MASK),
@@ -449,25 +467,26 @@ impl WebsocketStream {
         }
     }
 
+    /// Attempts to read the payload length from the socket
     fn read_payload_length(&mut self) -> PayloadLenResult {
-        let count = self.buffer.remaining.clone();
+        let count = self.buffer.remaining;
         match self.read_num_bytes(count) {
             Ok(()) => {
                 if self.msg.payload_key == 126 {
                     let mut len = 0u16;
                     len = len | self.buffer.buf[0] as u16;
-                    len = (len << 8) ^ self.buffer.buf[1] as u16;
+                    len = (len << 8) | self.buffer.buf[1] as u16;
                     Ok(len as u64)
                 } else {
                     let mut len = 0u64;
                     len = len | self.buffer.buf[0] as u64;
-                    len = (len << 8) ^ self.buffer.buf[1] as u64;
-                    len = (len << 8) ^ self.buffer.buf[2] as u64;
-                    len = (len << 8) ^ self.buffer.buf[3] as u64;
-                    len = (len << 8) ^ self.buffer.buf[4] as u64;
-                    len = (len << 8) ^ self.buffer.buf[5] as u64;
-                    len = (len << 8) ^ self.buffer.buf[6] as u64;
-                    len = (len << 8) ^ self.buffer.buf[7] as u64;
+                    len = (len << 8) | self.buffer.buf[1] as u64;
+                    len = (len << 8) | self.buffer.buf[2] as u64;
+                    len = (len << 8) | self.buffer.buf[3] as u64;
+                    len = (len << 8) | self.buffer.buf[4] as u64;
+                    len = (len << 8) | self.buffer.buf[5] as u64;
+                    len = (len << 8) | self.buffer.buf[6] as u64;
+                    len = (len << 8) | self.buffer.buf[7] as u64;
                     Ok(len)
                 }
             }
@@ -477,7 +496,7 @@ impl WebsocketStream {
 
     /// Attempts to read the masking key from the stream
     fn read_masking_key(&mut self) -> SysReadResult {
-        let count = self.buffer.remaining.clone();
+        let count = self.buffer.remaining;
         match self.read_num_bytes(count) {
             Ok(()) => Ok(()),
             Err(e) => Err(e)
@@ -486,7 +505,7 @@ impl WebsocketStream {
 
     /// Attempts to read the payload from the stream
     fn read_payload(&mut self) -> SysReadResult {
-        let count = self.buffer.remaining.clone();
+        let count = self.buffer.remaining;
         match self.read_num_bytes(count) {
             Ok(()) => Ok(()),
             Err(e) => Err(e)
@@ -531,6 +550,12 @@ impl WebsocketStream {
             };
         }
 
+        // Check for EOF
+        if num_read == 0 {
+            unsafe { libc::free(buffer); }
+            return Err(ReadError::EAGAIN);
+        }
+
         // Add bytes to msg buffer
         for x in 0..num_read as isize {
             unsafe {
@@ -543,100 +568,114 @@ impl WebsocketStream {
         Ok(())
     }
 
+    /// Attempts to write data to the socket
+    pub fn write(&mut self, op: OpCode, payload: &mut Vec<u8>) -> WriteResult {
+        let mut out_buf: Vec<u8> = Vec::with_capacity(payload.len() + 9);
 
-    //
-    // /// Attempts to write data to the socket
-    // pub fn write(&mut self, op: OpCode, payload: &mut Vec<u8>) -> WriteResult {
-    //     let mut out_buf: Vec<u8> = Vec::with_capacity(payload.len() + 9);
-    //
-    //     self.set_op_code(&op, &mut out_buf);
-    //     self.set_payload_info(payload.len(), &mut out_buf);
-    //     out_buf.append(payload);
-    //
-    //     self.write_bytes(&out_buf)
-    // }
-    //
-    // fn set_op_code(&self, op: &OpCode, buf: &mut Vec<u8>) {
-    //     let op_code = match *op {
-    //         OpCode::Continuation    => OP_CONTINUATION,
-    //         OpCode::Text            => OP_TEXT,
-    //         OpCode::Binary          => OP_BINARY,
-    //         OpCode::Close           => OP_CLOSE,
-    //         OpCode::Ping            => OP_PING,
-    //         OpCode::Pong            => OP_PONG
-    //     };
-    //     buf.push(op_code | OP_CODE_MASK);
-    // }
-    //
-    // fn set_payload_info(&self, len: usize, buf: &mut Vec<u8>) {
-    //     if len <= 125 {
-    //         buf.push(len as u8);
-    //     } else if len <= 65535 {
-    //         let mut len_buf = [0u8; 2];
-    //         len_buf[0] = (len as u16 & 0b1111_1111u16 << 8) as u8;
-    //         len_buf[1] = (len as u16 & 0b1111_1111 as u16) as u8;
-    //
-    //         buf.push(126u8); // 16 bit prelude
-    //         buf.push(len_buf[0]);
-    //         buf.push(len_buf[1]);
-    //     } else {
-    //         let mut len_buf = [0u8; 8];
-    //         len_buf[0] = (len as u64 & 0b1111_1111u64 << 56) as u8;
-    //         len_buf[1] = (len as u64 & 0b1111_1111u64 << 48) as u8;
-    //         len_buf[2] = (len as u64 & 0b1111_1111u64 << 40) as u8;
-    //         len_buf[3] = (len as u64 & 0b1111_1111u64 << 32) as u8;
-    //         len_buf[4] = (len as u64 & 0b1111_1111u64 << 24) as u8;
-    //         len_buf[5] = (len as u64 & 0b1111_1111u64 << 16) as u8;
-    //         len_buf[6] = (len as u64 & 0b1111_1111u64 << 8) as u8;
-    //         len_buf[7] = (len as u64 & 0b1111_1111u64) as u8;
-    //
-    //         buf.push(127u8); // 64 bit prelude
-    //         buf.push(len_buf[0]);
-    //         buf.push(len_buf[1]);
-    //         buf.push(len_buf[2]);
-    //         buf.push(len_buf[3]);
-    //         buf.push(len_buf[4]);
-    //         buf.push(len_buf[5]);
-    //         buf.push(len_buf[6]);
-    //         buf.push(len_buf[7]);
-    //     }
-    // }
-    //
-    // fn write_bytes(&mut self, buf: &Vec<u8>) -> SysWriteResult {
-    //     let buffer = buf.as_slice();
-    //     let fd = self.stream.as_raw_fd();
-    //     let count = buf.len() as size_t;
-    //
-    //     let mut num_written;
-    //     unsafe {
-    //         let buff_ptr = buffer.as_ptr();
-    //         let void_buff_ptr: *const c_void = mem::transmute(buff_ptr);
-    //         num_written = write(fd, void_buff_ptr, count);
-    //     }
-    //
-    //     if num_written < 0 {
-    //         let errno = os::errno();
-    //         return match errno {
-    //             posix88::EAGAIN     => Err(WriteError::EAGAIN),
-    //             posix88::EBADF      => Err(WriteError::EBADF),
-    //             posix88::EFAULT     => Err(WriteError::EFAULT),
-    //             posix88::EFBIG      => Err(WriteError::EFBIG),
-    //             posix88::EINTR      => Err(WriteError::EINTR),
-    //             posix88::EINVAL     => Err(WriteError::EINVAL),
-    //             posix88::EIO        => Err(WriteError::EIO),
-    //             posix88::ENOSPC     => Err(WriteError::ENOSPC),
-    //             posix88::EPIPE      => Err(WriteError::EPIPE),
-    //             _ => panic!("Unknown errno: {}", errno),
-    //         }
-    //     }
-    //     Ok(num_written as u64)
-    // }
+        self.set_op_code(&op, &mut out_buf);
+        self.set_payload_info(payload.len(), &mut out_buf);
+        out_buf.append(payload);
+
+        self.write_bytes(&out_buf)
+    }
+
+    fn set_op_code(&self, op: &OpCode, buf: &mut Vec<u8>) {
+        let op_code = match *op {
+            OpCode::Continuation    => OP_CONTINUATION,
+            OpCode::Text            => OP_TEXT,
+            OpCode::Binary          => OP_BINARY,
+            OpCode::Close           => OP_CLOSE,
+            OpCode::Ping            => OP_PING,
+            OpCode::Pong            => OP_PONG
+        };
+        buf.push(op_code | OP_CODE_MASK);
+    }
+
+    fn set_payload_info(&self, len: usize, buf: &mut Vec<u8>) {
+        if len <= 125 {
+            buf.push(len as u8);
+        } else if len <= 65535 {
+            let mut len_buf = [0u8; 2];
+            len_buf[0] = (len as u16 & 0b1111_1111u16 << 8) as u8;
+            len_buf[1] = (len as u16 & 0b1111_1111 as u16) as u8;
+
+            buf.push(126u8); // 16 bit prelude
+            buf.push(len_buf[0]);
+            buf.push(len_buf[1]);
+        } else {
+            let mut len_buf = [0u8; 8];
+            len_buf[0] = (len as u64 & 0b1111_1111u64 << 56) as u8;
+            len_buf[1] = (len as u64 & 0b1111_1111u64 << 48) as u8;
+            len_buf[2] = (len as u64 & 0b1111_1111u64 << 40) as u8;
+            len_buf[3] = (len as u64 & 0b1111_1111u64 << 32) as u8;
+            len_buf[4] = (len as u64 & 0b1111_1111u64 << 24) as u8;
+            len_buf[5] = (len as u64 & 0b1111_1111u64 << 16) as u8;
+            len_buf[6] = (len as u64 & 0b1111_1111u64 << 8) as u8;
+            len_buf[7] = (len as u64 & 0b1111_1111u64) as u8;
+
+            buf.push(127u8); // 64 bit prelude
+            buf.push(len_buf[0]);
+            buf.push(len_buf[1]);
+            buf.push(len_buf[2]);
+            buf.push(len_buf[3]);
+            buf.push(len_buf[4]);
+            buf.push(len_buf[5]);
+            buf.push(len_buf[6]);
+            buf.push(len_buf[7]);
+        }
+    }
+
+    fn write_bytes(&mut self, buf: &Vec<u8>) -> SysWriteResult {
+        let buffer = &buf[..];
+        let fd = self.stream.as_raw_fd();
+        let count = buf.len() as size_t;
+
+        let mut num_written;
+        unsafe {
+            let buff_ptr = buffer.as_ptr();
+            let void_buff_ptr: *const c_void = mem::transmute(buff_ptr);
+            num_written = write(fd, void_buff_ptr, count);
+        }
+
+        if num_written < 0 {
+            let errno = errno().0 as i32;
+            return match errno {
+                posix88::EAGAIN     => Err(WriteError::EAGAIN),
+                posix88::EBADF      => Err(WriteError::EBADF),
+                posix88::EFAULT     => Err(WriteError::EFAULT),
+                posix88::EFBIG      => Err(WriteError::EFBIG),
+                posix88::EINTR      => Err(WriteError::EINTR),
+                posix88::EINVAL     => Err(WriteError::EINVAL),
+                posix88::EIO        => Err(WriteError::EIO),
+                posix88::ENOSPC     => Err(WriteError::ENOSPC),
+                posix88::EPIPE      => Err(WriteError::EPIPE),
+                _ => panic!("Unknown errno during write: {}", errno),
+            }
+        }
+        Ok(num_written as u64)
+    }
 }
 
-// impl Clone for WebsocketStream {
-//     fn clone(&self) -> WebsocketStream {
-//         WebsocketStream {
-//             stream: self.stream.try_clone().unwrap()
-//         }
-//     }
-// }
+impl Clone for WebsocketStream {
+    fn clone(&self) -> WebsocketStream {
+        WebsocketStream {
+            mode: self.mode.clone(),
+            stream: self.stream.try_clone().unwrap(),
+            state: self.state.clone(),
+            msg: self.msg.clone(),
+            buffer: self.buffer.clone()
+        }
+    }
+}
+
+impl fmt::Display for State {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            State::OpCode => "OpCode".fmt(f),
+            State::PayloadKey => "PayloadKey".fmt(f),
+            State::PayloadLength => "PayloadLength".fmt(f),
+            State::MaskingKey => "MaskingKey".fmt(f),
+            State::Payload => "Payload".fmt(f)
+        }
+    }
+}

@@ -245,3 +245,16 @@ impl fmt::Display for SetFdError {
         }
     }
 }
+
+impl fmt::Display for OpCode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            OpCode::Continuation => "Continuation".fmt(f),
+            OpCode::Text => "Text".fmt(f),
+            OpCode::Binary => "Binary".fmt(f),
+            OpCode::Close => "Close".fmt(f),
+            OpCode::Ping => "Ping".fmt(f),
+            OpCode::Pong => "Pong".fmt(f),
+        }
+    }
+}
