@@ -1,15 +1,14 @@
 websocket-stream [<img src="https://travis-ci.org/nathansizemore/websocket-stream.png?branch=master">](https://travis-ci.org/nathansizemore/websocket-stream)
 ================
 
-websocket-stream is a non-blocking [RFC-6455](https://tools.ietf.org/html/rfc6455)
+websocket-stream is a [RFC-6455](https://tools.ietf.org/html/rfc6455)
 wrapper for [TcpStream](http://doc.rust-lang.org/std/net/struct.TcpStream.html)
-on POSIX-like kernels. I don't do enough Windows development to care about
-implementing it for that configuration. Feel free to send me a pull
-request if you want to take the time to implement Windows sockets as well.
+on POSIX-like kernels. It can be used in blocking or non-blocking mode.
+
+I don't do enough Windows development to care about ensuring it is platform agnostic. Feel free to send me a pull request if you want to take the time to implement Windows sockets as well.
 
 It achieves it's non-blocking state by setting the `O_NONBLOCK` flag on the
-stream's file descriptor. Aside from the system calls, the entire API is
-memory safe.
+stream's file descriptor.  
 
 ### Why another Websocket Thing in Rust?
 There are a lot of Websocket libraries out for Rust right now, but they all
@@ -19,18 +18,18 @@ Mainly to overcome Rust's blocking as default IO implementation.
 This is wonderful, unless your server is expected to handle *lots* of
 concurrent connections for long periods of time. Context switching between
 200k threads will absolutely kill any gains you get by having separate read and
-write operations.
+write operations. So, I wrote this thing.
 
 ### Example Usage
 ~~~rust
-extern crate "websocket-stream" as wss;
+extern crate websocket_stream as wss;
 
-use wss::WebSocketStream;
+use wss::{WebsocketStream, ReadResult, WriteResult, Mode};
 use wss::util::{OpCode, ReadError, WriteError};
 
 fn some_function() {
     // stream is some std::net::TcpStream
-    let mut ws_stream = match WebSocketStream::new(stream) {
+    let mut ws_stream = match WebsocketStream::new(stream, Mode::NonBlock) {
         Ok(ws) => ws,
         Err(e) => {
             // This arm is hit when the system does not support 0_NONBLOCK
@@ -52,17 +51,13 @@ fn some_function() {
         }
         Err(e) => {
             match e {
-                ReadError::NoData => {
-                    // This arm is hit when there is nothing in the buffer
-                }
-                ReadError::DataStop => {
-                    // This arm is hit when the buffer was exhausted before
-                    // the message was read in full. The partial message is
-                    // returned
+                ReadError::EAGAIN => {
+                    // This arm is hit in Mode::NonBlock
+                    // Signifies there was no data to read
                 }
                 _ => {
                     // This arm is hit on syscall level errors.
-                    // Errno is set and can be printed for details
+                    // ReadError can be printed for details
                 }
             }
         }
@@ -76,7 +71,7 @@ fn some_function() {
         }
         Err(e) => {
             // This arm is hit on syscall level errors.
-            // Errno is set and can be printed for details
+            // WriteError can be printed for details
         }
     }
 }
