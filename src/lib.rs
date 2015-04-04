@@ -23,7 +23,6 @@
 
 //! WebsocketStream crate
 
- #![feature(io_ext, collections)]
 
 extern crate libc;
 extern crate errno;
@@ -243,6 +242,7 @@ impl WebsocketStream {
         }
     }
 
+    /// Sets the stream to non-blocking mode
     fn set_non_block(stream: &TcpStream) -> SetFdResult {
         let fd = stream.as_raw_fd();
         let mut response;
@@ -574,7 +574,12 @@ impl WebsocketStream {
 
         self.set_op_code(&op, &mut out_buf);
         self.set_payload_info(payload.len(), &mut out_buf);
-        out_buf.append(payload);
+
+        // TODO - Fix with Vec.append() once stable
+        // out_buf.append(payload);
+        for byte in payload.iter() {
+            out_buf.push(*byte);
+        }
 
         self.write_bytes(&out_buf)
     }
