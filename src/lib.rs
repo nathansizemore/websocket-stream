@@ -281,9 +281,9 @@ impl WebsocketStream {
     /// If socket is in Mode::NonBlock and data is available,
     /// it will read until a complete message is received.  If the buffer
     /// has run out, and it is still waiting on the remaining payload, it
-    /// will attempt 3 more reads and then give up, disregarding the message.
+    /// will adjust the remaining needed in it's buffer and will adjust on
+    /// the next call to this function.
     pub fn read(&mut self) -> ReadResult {
-
         // Read the OpCode
         if self.state == State::OpCode {
             if self.buffer.remaining == 0 {
