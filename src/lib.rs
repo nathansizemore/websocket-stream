@@ -473,13 +473,11 @@ impl WebsocketStream {
         match self.read_num_bytes(count) {
             Ok(()) => {
                 if self.msg.payload_key == 126 {
-                    let mut len = 0u16;
-                    len = (self.buffer.buf[0] as u16) << 8;
+                    let mut len = (self.buffer.buf[0] as u16) << 8;
                     len = len | (self.buffer.buf[1] as u16);
                     Ok(len as u64)
                 } else {
-                    let mut len = 0u64;
-                    len = (self.buffer.buf[0] as u64) << 56;
+                    let mut len = (self.buffer.buf[0] as u64) << 56;
                     len = len | ((self.buffer.buf[1] as u64) << 48);
                     len = len | ((self.buffer.buf[2] as u64) << 40);
                     len = len | ((self.buffer.buf[3] as u64) << 32);
@@ -609,14 +607,14 @@ impl WebsocketStream {
             buf.push(len_buf[1]);
         } else {
             let mut len_buf = [0u8; 8];
-            len_buff[0] = ((len as u64) >> 56) as u8;
-            len_buff[1] = ((len as u64) >> 48) as u8;
-            len_buff[2] = ((len as u64) >> 40) as u8;
-            len_buff[3] = ((len as u64) >> 32) as u8;
-            len_buff[4] = ((len as u64) >> 24) as u8;
-            len_buff[5] = ((len as u64) >> 16) as u8;
-            len_buff[6] = ((len as u64) >> 8) as u8;
-            len_buff[7] = len as u8;
+            len_buf[0] = ((len as u64) >> 56) as u8;
+            len_buf[1] = ((len as u64) >> 48) as u8;
+            len_buf[2] = ((len as u64) >> 40) as u8;
+            len_buf[3] = ((len as u64) >> 32) as u8;
+            len_buf[4] = ((len as u64) >> 24) as u8;
+            len_buf[5] = ((len as u64) >> 16) as u8;
+            len_buf[6] = ((len as u64) >> 8) as u8;
+            len_buf[7] = len as u8;
 
             buf.push(127u8); // 64 bit prelude
             buf.push(len_buf[0]);
