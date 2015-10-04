@@ -8,17 +8,7 @@ on POSIX-like kernels. It can be used in blocking or non-blocking mode.
 I don't do enough Windows development to care about ensuring it is platform agnostic. Feel free to send me a pull request if you want to take the time to implement Windows sockets as well.
 
 It achieves it's non-blocking state by setting the `O_NONBLOCK` flag on the
-stream's file descriptor.  
-
-### Why another Websocket Thing in Rust?
-There are a lot of Websocket libraries out for Rust right now, but they all
-force the same model of server design on the library user. Most implement
-Websockets by creating a thread for each connection to read, and one to write.
-Mainly to overcome Rust's blocking as default IO implementation.
-This is wonderful, unless your server is expected to handle *lots* of
-concurrent connections for long periods of time. Context switching between
-200k threads will absolutely kill any gains you get by having separate read and
-write operations. So, I wrote this thing.
+stream's file descriptor.
 
 ### Example Usage
 ~~~rust
