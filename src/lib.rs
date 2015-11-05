@@ -32,9 +32,8 @@ use std::result::Result;
 use std::net::TcpStream;
 use std::os::unix::io::AsRawFd;
 
-use self::errno::errno;
-use self::libc::consts::os::posix88;
-use self::libc::{size_t, c_void, c_int, ssize_t};
+use errno::errno;
+use libc::{size_t, c_void, c_int, ssize_t};
 
 use util::*;
 pub mod util;
@@ -189,52 +188,52 @@ impl WebsocketStream {
         let fd = stream.as_raw_fd();
 
         // Get the flags currently set on the fd
-        let mut flags;
+        let flags;
         unsafe {
-            flags = libc::fcntl(fd, libc::consts::os::posix01::F_GETFL);
+            flags = libc::fcntl(fd, libc::F_GETFL);
         }
 
         // Ensure we were able to get the current set flags
         if flags < 0 {
             let errno = errno().0 as i32;
             return match errno {
-                posix88::EACCES     => Err(SetFdError::EACCES),
-                posix88::EAGAIN     => Err(SetFdError::EAGAIN),
-                posix88::EBADF      => Err(SetFdError::EBADF),
-                posix88::EDEADLK    => Err(SetFdError::EDEADLK),
-                posix88::EFAULT     => Err(SetFdError::EFAULT),
-                posix88::EINTR      => Err(SetFdError::EINTR),
-                posix88::EINVAL     => Err(SetFdError::EINVAL),
-                posix88::EMFILE     => Err(SetFdError::EMFILE),
-                posix88::ENOLCK     => Err(SetFdError::ENOLCK),
-                posix88::EPERM      => Err(SetFdError::EPERM),
+                libc::EACCES     => Err(SetFdError::EACCES),
+                libc::EAGAIN     => Err(SetFdError::EAGAIN),
+                libc::EBADF      => Err(SetFdError::EBADF),
+                libc::EDEADLK    => Err(SetFdError::EDEADLK),
+                libc::EFAULT     => Err(SetFdError::EFAULT),
+                libc::EINTR      => Err(SetFdError::EINTR),
+                libc::EINVAL     => Err(SetFdError::EINVAL),
+                libc::EMFILE     => Err(SetFdError::EMFILE),
+                libc::ENOLCK     => Err(SetFdError::ENOLCK),
+                libc::EPERM      => Err(SetFdError::EPERM),
                 _ => panic!("Unexpected errno: {}", errno)
             };
         }
 
         // Remove non-blocking flag
-        let mut response;
+        let response;
         unsafe {
             response = libc::fcntl(
                 fd,
-                libc::consts::os::posix01::F_SETFL,
-                flags & !libc::consts::os::extra::O_NONBLOCK);
+                libc::F_SETFL,
+                flags & !libc::O_NONBLOCK);
         }
 
         // Ensure removal was successful
         if response < 0 {
             let errno = errno().0 as i32;
             return match errno {
-                posix88::EACCES     => Err(SetFdError::EACCES),
-                posix88::EAGAIN     => Err(SetFdError::EAGAIN),
-                posix88::EBADF      => Err(SetFdError::EBADF),
-                posix88::EDEADLK    => Err(SetFdError::EDEADLK),
-                posix88::EFAULT     => Err(SetFdError::EFAULT),
-                posix88::EINTR      => Err(SetFdError::EINTR),
-                posix88::EINVAL     => Err(SetFdError::EINVAL),
-                posix88::EMFILE     => Err(SetFdError::EMFILE),
-                posix88::ENOLCK     => Err(SetFdError::ENOLCK),
-                posix88::EPERM      => Err(SetFdError::EPERM),
+                libc::EACCES     => Err(SetFdError::EACCES),
+                libc::EAGAIN     => Err(SetFdError::EAGAIN),
+                libc::EBADF      => Err(SetFdError::EBADF),
+                libc::EDEADLK    => Err(SetFdError::EDEADLK),
+                libc::EFAULT     => Err(SetFdError::EFAULT),
+                libc::EINTR      => Err(SetFdError::EINTR),
+                libc::EINVAL     => Err(SetFdError::EINVAL),
+                libc::EMFILE     => Err(SetFdError::EMFILE),
+                libc::ENOLCK     => Err(SetFdError::ENOLCK),
+                libc::EPERM      => Err(SetFdError::EPERM),
                 _ => panic!("Unexpected errno: {}", errno)
             };
         } else {
@@ -245,27 +244,27 @@ impl WebsocketStream {
     /// Sets the stream to non-blocking mode
     fn set_non_block(stream: &TcpStream) -> SetFdResult {
         let fd = stream.as_raw_fd();
-        let mut response;
+        let response;
         unsafe {
             response = libc::fcntl(
                 fd,
-                libc::consts::os::posix01::F_SETFL,
-                libc::consts::os::extra::O_NONBLOCK);
+                libc::F_SETFL,
+                libc::O_NONBLOCK);
         }
 
         if response < 0 {
             let errno = errno().0 as i32;
             return match errno {
-                posix88::EACCES     => Err(SetFdError::EACCES),
-                posix88::EAGAIN     => Err(SetFdError::EAGAIN),
-                posix88::EBADF      => Err(SetFdError::EBADF),
-                posix88::EDEADLK    => Err(SetFdError::EDEADLK),
-                posix88::EFAULT     => Err(SetFdError::EFAULT),
-                posix88::EINTR      => Err(SetFdError::EINTR),
-                posix88::EINVAL     => Err(SetFdError::EINVAL),
-                posix88::EMFILE     => Err(SetFdError::EMFILE),
-                posix88::ENOLCK     => Err(SetFdError::ENOLCK),
-                posix88::EPERM      => Err(SetFdError::EPERM),
+                libc::EACCES     => Err(SetFdError::EACCES),
+                libc::EAGAIN     => Err(SetFdError::EAGAIN),
+                libc::EBADF      => Err(SetFdError::EBADF),
+                libc::EDEADLK    => Err(SetFdError::EDEADLK),
+                libc::EFAULT     => Err(SetFdError::EFAULT),
+                libc::EINTR      => Err(SetFdError::EINTR),
+                libc::EINVAL     => Err(SetFdError::EINVAL),
+                libc::EMFILE     => Err(SetFdError::EMFILE),
+                libc::ENOLCK     => Err(SetFdError::ENOLCK),
+                libc::EPERM      => Err(SetFdError::EPERM),
                 _ => panic!("Unexpected errno: {}", errno)
             };
         } else {
@@ -515,7 +514,7 @@ impl WebsocketStream {
         let fd = self.stream.as_raw_fd();
 
         // Create a buffer for the total of bytes still needed
-        let mut buffer;
+        let buffer;
         unsafe {
             buffer = libc::calloc(count as size_t,
                 mem::size_of::<u8>() as size_t);
@@ -527,7 +526,7 @@ impl WebsocketStream {
         }
 
         // Read data into buffer
-        let mut num_read;
+        let num_read;
         unsafe {
             num_read = read(fd, buffer, count as size_t);
         }
@@ -537,13 +536,13 @@ impl WebsocketStream {
             unsafe { libc::free(buffer); }
             let errno = errno().0 as i32;
             return match errno {
-                posix88::EBADF      => Err(ReadError::EBADF),
-                posix88::EFAULT     => Err(ReadError::EFAULT),
-                posix88::EINTR      => Err(ReadError::EINTR),
-                posix88::EINVAL     => Err(ReadError::EINVAL),
-                posix88::EIO        => Err(ReadError::EIO),
-                posix88::EISDIR     => Err(ReadError::EISDIR),
-                posix88::EAGAIN     => Err(ReadError::EAGAIN),
+                libc::EBADF      => Err(ReadError::EBADF),
+                libc::EFAULT     => Err(ReadError::EFAULT),
+                libc::EINTR      => Err(ReadError::EINTR),
+                libc::EINVAL     => Err(ReadError::EINVAL),
+                libc::EIO        => Err(ReadError::EIO),
+                libc::EISDIR     => Err(ReadError::EISDIR),
+                libc::EAGAIN     => Err(ReadError::EAGAIN),
                 _ => panic!("Unexpected errno during read: {}", errno)
             };
         }
@@ -633,7 +632,7 @@ impl WebsocketStream {
         let fd = self.stream.as_raw_fd();
         let count = buf.len() as size_t;
 
-        let mut num_written;
+        let num_written;
         unsafe {
             let buff_ptr = buffer.as_ptr();
             let void_buff_ptr: *const c_void = mem::transmute(buff_ptr);
@@ -643,15 +642,15 @@ impl WebsocketStream {
         if num_written < 0 {
             let errno = errno().0 as i32;
             return match errno {
-                posix88::EAGAIN     => Err(WriteError::EAGAIN),
-                posix88::EBADF      => Err(WriteError::EBADF),
-                posix88::EFAULT     => Err(WriteError::EFAULT),
-                posix88::EFBIG      => Err(WriteError::EFBIG),
-                posix88::EINTR      => Err(WriteError::EINTR),
-                posix88::EINVAL     => Err(WriteError::EINVAL),
-                posix88::EIO        => Err(WriteError::EIO),
-                posix88::ENOSPC     => Err(WriteError::ENOSPC),
-                posix88::EPIPE      => Err(WriteError::EPIPE),
+                libc::EAGAIN     => Err(WriteError::EAGAIN),
+                libc::EBADF      => Err(WriteError::EBADF),
+                libc::EFAULT     => Err(WriteError::EFAULT),
+                libc::EFBIG      => Err(WriteError::EFBIG),
+                libc::EINTR      => Err(WriteError::EINTR),
+                libc::EINVAL     => Err(WriteError::EINVAL),
+                libc::EIO        => Err(WriteError::EIO),
+                libc::ENOSPC     => Err(WriteError::ENOSPC),
+                libc::EPIPE      => Err(WriteError::EPIPE),
                 _ => panic!("Unknown errno during write: {}", errno),
             }
         }
