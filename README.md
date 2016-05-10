@@ -1,6 +1,10 @@
 websocket-stream [<img src="https://travis-ci.org/nathansizemore/websocket-stream.png?branch=master">](https://travis-ci.org/nathansizemore/websocket-stream)
 ================
 
+## Deprecated
+
+Please use [simple-stream](https://github.com/nathansizemore/simple-stream) instead.
+
 websocket-stream is a [RFC-6455](https://tools.ietf.org/html/rfc6455)
 wrapper for [TcpStream](http://doc.rust-lang.org/std/net/struct.TcpStream.html)
 on POSIX-like kernels. It can be used in blocking or non-blocking mode.
